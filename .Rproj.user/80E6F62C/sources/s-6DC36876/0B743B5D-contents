@@ -61,3 +61,7 @@ cat("\nAll analyses completed successfully.\n")
 cat("Figures saved in: figures/\n")
 cat("Results saved in: results/fastica_results.RData\n")
 cat("============================================\n")
+
+list.files("data")
+getwd()
+read.table("data/mezcla1.txt")

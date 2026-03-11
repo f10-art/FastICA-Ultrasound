@@ -51,4 +51,3 @@ p <- ggplot(df_long, aes(x = Fold, y = Correlation, color = Component, shape = C
 
 # --- Mostrar ---
 print(p)
-

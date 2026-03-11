@@ -47,7 +47,7 @@ p <- ggplot(df_long, aes(x = Fold, y = Correlation, color = Component, shape = C
   theme_minimal() +
   theme(
     axis.title.x = element_text(size = 9),
-    axis.title.y = element_text(size = 9, colour = "gray30"),  # <-- CORRECCIÓN AQUÍ
+    axis.title.y = element_text(size = 9, colour = "gray30"), 
     axis.text = element_text(size = 8),
     legend.title = element_blank(),
     legend.text = element_text(size = 8),

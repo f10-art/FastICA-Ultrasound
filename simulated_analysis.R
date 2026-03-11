@@ -1,30 +1,72 @@
-# --- Libraries ---  
-library(fastICA)  
-library(ggplot2)  
-library(gridExtra)  
-library(signal)  
+# ============================================================
+#   PACKAGE INSTALLATION (only needed the first time)
+#   These commands install the required libraries if missing.
+#   Comment them out after installation to speed up execution.
+# ============================================================
 
-# --- Explicit normalization and centering ---  
+#install.packages("fastICA")     # Independent Component Analysis
+#install.packages("ggplot2")     # Plotting library
+#install.packages("gridExtra")   # Arrange multiple ggplots
+#install.packages("signal")      # DSP tools: filters, smoothing
+
+# ============================================================
+#   LIBRARIES
+#   These packages provide ICA, plotting, filtering, and DSP tools.
+# ============================================================
+library(fastICA)      # Fast Independent Component Analysis
+library(ggplot2)      # Plotting library
+library(gridExtra)    # Arrange multiple ggplots in a grid
+library(signal)       # DSP tools: Butterworth, Savitzky–Golay, filtfilt
+
+
+# ============================================================
+#   NORMALIZATION FUNCTIONS
+# ============================================================
+
+# Standard normalization: center to mean 0 and scale to unit variance.
+# Input: numeric vector x
+# Output: normalized vector
 norm_center <- function(x) {  
   scale(x, center = TRUE, scale = TRUE)  
 }  
 
-# --- Normalization to range [-1, 1] ---  
+# Normalize a signal to the range [-1, 1].
+# Input: numeric vector x
+# Output: rescaled vector in [-1, 1]
 norm_pm1 <- function(x) {  
   (2 * (x - min(x)) / (max(x) - min(x))) - 1  
 }  
 
-fs <- 50e6
-signal_length <- 3500
-t_total <- seq_len(signal_length) / fs
 
-# --- Filtering functions ---  
+# ============================================================
+#   SAMPLING PARAMETERS
+# ============================================================
+fs <- 50e6                 # Sampling frequency = 50 MHz
+signal_length <- 3500      # Number of samples
+t_total <- seq_len(signal_length) / fs   # Time axis in seconds
+
+
+# ============================================================
+#   FILTERING FUNCTIONS
+# ============================================================
+
+# Butterworth low-pass filter.
+# Parameters:
+#   x      = input signal
+#   fs     = sampling frequency
+#   cutoff = cutoff frequency (default 2 MHz)
+#   order  = filter order (default 4)
 butter_filter <- function(x, fs, cutoff = 2e6, order = 4) {  
   Wn <- cutoff / (fs / 2)  
   bf <- butter(order, Wn, type = "low")  
   filtfilt(bf, x)  
 }  
 
+# Simple 1D Kalman filter for smoothing.
+# Parameters:
+#   x = input signal
+#   Q = process noise variance
+#   R = measurement noise variance
 kalman_filter <- function(x, Q = 0.01, R = 0.01) {  
   n <- length(x)  
   x_hat <- numeric(n)  
@@ -40,21 +82,35 @@ kalman_filter <- function(x, Q = 0.01, R = 0.01) {
   x_hat  
 }  
 
+# Savitzky–Golay smoothing filter.
+# Parameters:
+#   p = polynomial order
+#   n = window length
 savitzky_golay_filter <- function(x, p = 3, n = 11) {  
   sgolayfilt(x, p = p, n = n)  
 }  
 
+# Moving average filter.
+# Parameter:
+#   n = window size
 moving_average_filter <- function(x, n = 5) {  
   filt <- stats::filter(x, rep(1 / n, n), sides = 2)  
   filt[is.na(filt)] <- x[is.na(filt)]  
   filt  
 }  
 
+# Replace NA or infinite values with original samples.
 clean_signal <- function(x, original) {  
   x[is.na(x) | is.infinite(x)] <- original[is.na(x) | is.infinite(x)]  
   x  
 }  
 
+# Full filtering pipeline combining:
+#   1) Butterworth low-pass
+#   2) Moving average
+#   3) Kalman filter
+#   4) Savitzky–Golay smoothing
+#   5) Cleanup of NA/Inf
 full_filter <- function(x, fs) {  
   x1 <- butter_filter(x, fs)  
   x2 <- moving_average_filter(x1)  
@@ -63,6 +119,18 @@ full_filter <- function(x, fs) {
   clean_signal(x4, x)  
 }  
 
+
+# ============================================================
+#   FFT PLOTTING FUNCTION
+# ============================================================
+
+# Compute and plot normalized FFT magnitude up to max_freq.
+# Parameters:
+#   signal   = input signal
+#   fs       = sampling frequency
+#   title    = plot title
+#   color    = line color
+#   max_freq = maximum frequency displayed
 plot_fft_normalized <- function(signal, fs, title, color = "blue", max_freq = 4e6) {
   n <- length(signal)
   freq <- seq(0, fs/2, length.out = floor(n/2))
@@ -79,51 +147,91 @@ plot_fft_normalized <- function(signal, fs, title, color = "blue", max_freq = 4e
           axis.text = element_text(size = 6)) 
 } 
 
-# --- Simulated original signals ---  
+
+# ============================================================
+#   SIMULATED ORIGINAL ULTRASONIC SOURCES
+# ============================================================
+
+# Two synthetic ultrasonic signals composed of multiple sinusoids.
 originalUS <- 0.5*sin(2*pi*1e6*t_total) + 0.3*sin(2*pi*2e6*t_total)
 originalRF <- 0.7*sin(2*pi*0.5e6*t_total) + 0.4*sin(2*pi*1.5e6*t_total)
 
-# --- Generate random mixing matrix A ---  
+
+# ============================================================
+#   MIXING PROCESS
+# ============================================================
+
+# Random 2x2 mixing matrix A.
 set.seed(2)
 A <- matrix(runif(4, min = 0.1, max = 1.0), nrow = 2, ncol = 2)
 
-# --- Automatically generated mixtures using A ---  
+# Combine sources into matrix S and generate mixtures x(t) = A * s(t).
 S <- cbind(originalUS, originalRF)
-mixtures <- S %*% t(A)  # x(t) = A * s(t)
+mixtures <- S %*% t(A)
 
-# Add some noise
+# Add Gaussian noise to mixtures.
 mixtures <- mixtures + matrix(rnorm(2*signal_length, 0, 0.05), ncol=2)
 
+# Extract mixture channels.
 mixture1 <- mixtures[,1]
 mixture2 <- mixtures[,2]
 
-# --- Filtering ---  
+
+# ============================================================
+#   FILTERING AND NORMALIZATION BEFORE ICA
+# ============================================================
+
+# Apply full filtering pipeline.
 mixture1_proc <- full_filter(mixture1, fs)  
 mixture2_proc <- full_filter(mixture2, fs)  
 
-# --- Explicitly normalize and center for ICA ---  
+# Standardize filtered mixtures.
 mixture1_norm <- norm_center(mixture1_proc)  
 mixture2_norm <- norm_center(mixture2_proc)  
+
+# Matrix for ICA input.
 filtered_data <- cbind(mixture1_norm, mixture2_norm)  
 
-# --- FastICA ---  
+
+# ============================================================
+#   FASTICA SEPARATION
+# ============================================================
+
+# Run FastICA with logcosh nonlinearity.
 set.seed(17) 
-ica_res <- fastICA(filtered_data, n.comp = 2, row.norm = FALSE, fun = "logcosh", alpha = 1.5, method = "R", tol = 0.005)  
+ica_res <- fastICA(filtered_data, n.comp = 2, row.norm = FALSE,
+                   fun = "logcosh", alpha = 1.5, method = "R", tol = 0.005)
+
+# Extract independent components.
 S1 <- ica_res$S[,1]  
 S2 <- ica_res$S[,2]  
 
-# --- Sign normalization for consistency ---  
+
+# ============================================================
+#   SIGN NORMALIZATION
+#   ICA components may appear inverted; align them using correlation.
+# ============================================================
+
 normalize_sign <- function(x, ref) {  
   if (cor(x, ref) < 0) return(-x) else return(x)  
 }  
+
 S1 <- normalize_sign(S1, mixture1)  
 S2 <- normalize_sign(S2, mixture2)  
 
-# --- Manual reconstruction with known weights of A ---  
+
+# ============================================================
+#   MANUAL RECONSTRUCTION USING MIXING MATRIX A
+# ============================================================
+
 comb1 <- A[1,1]*S1 + A[1,2]*S2
 comb2 <- A[2,1]*S1 + A[2,2]*S2
 
-# --- Correlations ---  
+
+# ============================================================
+#   CORRELATION AND RMSE METRICS
+# ============================================================
+
 cat("Mixing matrix A:\n")
 print(A)
 
@@ -295,6 +403,8 @@ g <- grid.arrange(p_originalUS, p_originalRF, p_mixture1, p_mixture2, p_fft_mixt
                   p_recovered1, p_recovered2, ncol = 2)  
 
 ggsave("simulated_signals_fastica.png", g, width = 12, height = 15, dpi = 300)
+
+
 
 
 

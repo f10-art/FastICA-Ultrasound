@@ -402,7 +402,7 @@ g <- grid.arrange(p_originalUS, p_originalRF, p_mixture1, p_mixture2, p_fft_mixt
                   p_mixture1_filtered, p_mixture2_filtered, p_separated1, p_separated2,
                   p_recovered1, p_recovered2, ncol = 2)  
 
-ggsave("simulated_signals_fastica.png", g, width = 12, height = 15, dpi = 300)
+
 
 
 

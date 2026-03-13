@@ -398,7 +398,7 @@ p_originalRF <- ggplot(df_signals, aes(x = Time_sec, y = OriginalRF)) +
         axis.text = element_text(size = 6))  
 
 # --- Arrange plots ---
-g <- grid.arrange(p_originalUS, p_originalRF, p_mixture1, p_mixture2, p_fft_mixture1, p_fft_mixture2,
+grid.arrange(p_originalUS, p_originalRF, p_mixture1, p_mixture2, p_fft_mixture1, p_fft_mixture2,
                   p_mixture1_filtered, p_mixture2_filtered, p_separated1, p_separated2,
                   p_recovered1, p_recovered2, ncol = 2)  
 

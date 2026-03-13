@@ -421,7 +421,7 @@ p_originalRF <- ggplot(df_signals, aes(x = Time_sec, y = OriginalRF)) +
 p_fft_mixture1 <- plot_fft_normalized(mixture1, fs, title = " (b) FFT Original Mixture 1", color = "blue")  
 p_fft_mixture2 <- plot_fft_normalized(mixture2, fs, title = " (b) FFT Original Mixture 2", color = "blue")  
 
-g <- grid.arrange(p_mixture1, p_mixture2, p_fft_mixture1, p_fft_mixture2, 
+grid.arrange(p_mixture1, p_mixture2, p_fft_mixture1, p_fft_mixture2, 
                   p_mixture1_filtered, p_mixture2_filtered,
                   p_separated1, p_separated2, 
                   p_reconstructed1, p_reconstructed2, 

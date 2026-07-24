@@ -180,18 +180,40 @@ w21 <- -0.9; w22 <- 0.1
 comb1 <- w11 * S1 + w12 * S2  
 comb2 <- w21 * S1 + w22 * S2  
 
-# --- Performance metrics ---
+# --- Performance metrics (original vs adjusted) ---
 
-cor_comb1_mixture1 <- cor(comb1, mixture1)  
-cor_comb2_mixture2 <- cor(comb2, mixture2)  
-rmse_comb1_mixture1 <- sqrt(mean((comb1 - mixture1)^2))  
-rmse_comb2_mixture2 <- sqrt(mean((comb2 - mixture2)^2))  
+rmse_original1 <- sqrt(mean((comb1 - mixture1)^2))
+rmse_original2 <- sqrt(mean((comb2 - mixture2)^2))
 
-cat("----------------------------------------------------\n")  
-cat("LINEAR COMBINATION DIAGNOSTICS - MANUALLY ADJUSTED WEIGHTS\n")  
-cat("----------------------------------------------------\n\n")  
-cat("comb1 vs mixture1: ", round(cor_comb1_mixture1, 4), ", RMSE =", round(rmse_comb1_mixture1, 6), "\n")  
-cat("comb2 vs mixture2: ", round(cor_comb2_mixture2, 4), ", RMSE =", round(rmse_comb2_mixture2, 6), "\n\n")  
+fit1 <- lm(mixture1 ~ comb1)
+comb1_adj <- predict(fit1)
+
+fit2 <- lm(mixture2 ~ comb2)
+comb2_adj <- predict(fit2)
+
+rmse1 <- sqrt(mean((mixture1 - comb1_adj)^2))
+rmse2 <- sqrt(mean((mixture2 - comb2_adj)^2))
+
+rmse_adjusted1 <- sqrt(mean((comb1_adj - mixture1)^2))
+rmse_adjusted2 <- sqrt(mean((comb2_adj - mixture2)^2))
+
+cor_original1 <- cor(comb1, mixture1)
+cor_original2 <- cor(comb2, mixture2)
+
+cor_adjusted1 <- cor(comb1_adj, mixture1)
+cor_adjusted2 <- cor(comb2_adj, mixture2)
+
+cat("===== MIXTURE 1 =====\n")
+cat("Correlation original :", round(cor_original1, 4), "\n")
+cat("Correlation adjusted :", round(cor_adjusted1, 4), "\n")
+cat("RMSE original        :", round(rmse_original1, 6), "\n")
+cat("RMSE adjusted        :", round(rmse_adjusted1, 6), "\n\n")
+
+cat("===== MIXTURE 2 =====\n")
+cat("Correlation original :", round(cor_original2, 4), "\n")
+cat("Correlation adjusted :", round(cor_adjusted2, 4), "\n")
+cat("RMSE original        :", round(rmse_original1, 6), "\n")
+cat("RMSE adjusted        :", round(rmse_adjusted2, 6), "\n\n")
 
 
 

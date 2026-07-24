@@ -254,11 +254,38 @@ cor_comb2_mixture2 <- cor(comb2, mixture2)
 rmse_comb1_mixture1 <- sqrt(mean((comb1 - mixture1)^2))  
 rmse_comb2_mixture2 <- sqrt(mean((comb2 - mixture2)^2))  
 
-cat("----------------------------------------------------\n")  
-cat("RECONSTRUCTION RESULTS - ADJUSTED MANUAL WEIGHTS\n")  
-cat("----------------------------------------------------\n\n")  
-cat("comb1 vs mixture1: ", round(cor_comb1_mixture1, 4), ", RMSE =", round(rmse_comb1_mixture1, 6), "\n")  
-cat("comb2 vs mixture2: ", round(cor_comb2_mixture2, 4), ", RMSE =", round(rmse_comb2_mixture2, 6), "\n\n")  
+# ============================================================
+#   LINEAR ADJUSTMENT (REGRESSION) AND ADJUSTED METRICS
+# ============================================================
+
+# Linear regression adjustment (same method used in your main pipeline)
+fit1 <- lm(mixture1 ~ comb1)
+comb1_adj <- predict(fit1)
+
+fit2 <- lm(mixture2 ~ comb2)
+comb2_adj <- predict(fit2)
+
+# Adjusted RMSE
+rmse_comb1_adj <- sqrt(mean((mixture1 - comb1_adj)^2))
+rmse_comb2_adj <- sqrt(mean((mixture2 - comb2_adj)^2))
+
+# Adjusted correlations
+cor_comb1_adj <- cor(comb1_adj, mixture1)
+cor_comb2_adj <- cor(comb2_adj, mixture2)
+
+cat("----------------------------------------------------\n")
+cat("RECONSTRUCTION RESULTS - ORIGINAL vs ADJUSTED\n")
+cat("----------------------------------------------------\n\n")
+
+cat("Original comb1 vs mixture1:  Corr =", round(cor_comb1_mixture1, 4),
+    " RMSE =", round(rmse_comb1_mixture1, 6), "\n")
+cat("Adjusted comb1 vs mixture1:  Corr =", round(cor_comb1_adj, 4),
+    " RMSE =", round(rmse_comb1_adj, 6), "\n\n")
+
+cat("Original comb2 vs mixture2:  Corr =", round(cor_comb2_mixture2, 4),
+    " RMSE =", round(rmse_comb2_mixture2, 6), "\n")
+cat("Adjusted comb2 vs mixture2:  Corr =", round(cor_comb2_adj, 4),
+    " RMSE =", round(rmse_comb2_adj, 6), "\n\n")
 
 # --- Validation with original signals ---  
 cor_S1_US <- cor(S1, originalUS)  

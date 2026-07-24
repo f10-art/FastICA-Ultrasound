@@ -211,15 +211,26 @@ server <- function(input, output, session) {
     originalUS <- read_signal(input$file_refUS)
     originalRF <- read_signal(input$file_refRF)
     
-    mixture1_proc <- full_filter(mixture1, fs, cutoff = input$cutoff_freq, ma_n = input$ma_window, kalman_q = input$kalman_q, kalman_r = input$kalman_r, sg_p = input$sg_p, sg_n = input$sg_n)
-    mixture2_proc <- full_filter(mixture2, fs, cutoff = input$cutoff_freq, ma_n = input$ma_window, kalman_q = input$kalman_q, kalman_r = input$kalman_r, sg_p = input$sg_p, sg_n = input$sg_n)
+    mixture1_proc <- full_filter(mixture1, fs, cutoff = input$cutoff_freq,
+                                 ma_n = input$ma_window,
+                                 kalman_q = input$kalman_q,
+                                 kalman_r = input$kalman_r,
+                                 sg_p = input$sg_p,
+                                 sg_n = input$sg_n)
+    mixture2_proc <- full_filter(mixture2, fs, cutoff = input$cutoff_freq,
+                                 ma_n = input$ma_window,
+                                 kalman_q = input$kalman_q,
+                                 kalman_r = input$kalman_r,
+                                 sg_p = input$sg_p,
+                                 sg_n = input$sg_n)
     
     mixture1_norm <- norm_center(mixture1_proc)
     mixture2_norm <- norm_center(mixture2_proc)
     filtered_data <- cbind(mixture1_norm, mixture2_norm)
     
     set.seed(17)
-    ica_res <- fastICA(filtered_data, n.comp = 2, row.norm = FALSE, fun = "logcosh", alpha = 1.5, method = "R", tol = 0.005)
+    ica_res <- fastICA(filtered_data, n.comp = 2, row.norm = FALSE,
+                       fun = "logcosh", alpha = 1.5, method = "R", tol = 0.005)
     
     S1 <- as.numeric(ica_res$S[,1])
     S2 <- as.numeric(ica_res$S[,2])
@@ -227,14 +238,24 @@ server <- function(input, output, session) {
     S1 <- normalize_sign(S1, mixture1)
     S2 <- normalize_sign(S2, mixture2)
     
+    # --- Original linear combinations (manual weights) ---
     comb1 <- input$w11 * S1 + input$w12 * S2
     comb2 <- input$w21 * S1 + input$w22 * S2
     
+    # --- Adjusted combinations via linear regression (lm) ---
+    fit1 <- lm(mixture1 ~ comb1)
+    comb1_adj <- as.numeric(predict(fit1))
+    
+    fit2 <- lm(mixture2 ~ comb2)
+    comb2_adj <- as.numeric(predict(fit2))
+    
+    # --- Time vector and S1 insertion window ---
     t_total <- seq(0, (length(mixture1)-1)/fs, by = 1/fs)
     Separada1_pegada <- rep(0, length(t_total))
     
-    idx_pegar <- which(t_total >= input$window_range[1] & t_total <= input$window_range[2])
-    idx_pegar <- idx_pegar[idx_pegar <= length(S1)] 
+    idx_pegar <- which(t_total >= input$window_range[1] &
+                         t_total <= input$window_range[2])
+    idx_pegar <- idx_pegar[idx_pegar <= length(S1)]
     
     if (length(idx_pegar) > 1) {
       S1_segmento <- S1[idx_pegar]
@@ -252,18 +273,24 @@ server <- function(input, output, session) {
       }
       
       n_out <- length(idx_pegar)
-      S1_comprimida <- approx(seq(0, 1, length.out = length(S1_corregida)), S1_corregida, seq(0, 1, length.out = n_out))$y
+      S1_comprimida <- approx(seq(0, 1, length.out = length(S1_corregida)),
+                              S1_corregida,
+                              seq(0, 1, length.out = n_out))$y
       Separada1_pegada[idx_pegar] <- as.numeric(S1_comprimida)
     }
     
-    return(list(
+    list(
       mixture1 = mixture1, mixture2 = mixture2,
       mixture1_proc = mixture1_proc, mixture2_proc = mixture2_proc,
       originalUS = originalUS, originalRF = originalRF,
-      S1 = S1, S2 = S2, comb1 = comb1, comb2 = comb2,
-      Separada1_pegada = Separada1_pegada, t_total = t_total, fs = fs
-    ))
+      S1 = S1, S2 = S2,
+      comb1 = comb1, comb2 = comb2,
+      comb1_adj = comb1_adj, comb2_adj = comb2_adj,
+      Separada1_pegada = Separada1_pegada,
+      t_total = t_total, fs = fs
+    )
   })
+  
   
   # --- Render Main Dashboard ---
   output$composite_plot <- renderPlot({
@@ -613,15 +640,22 @@ server <- function(input, output, session) {
     p_pipeline_impact
   })
   
-  # --- Summary Table Output ---
   output$summary_table <- renderTable({
     res <- processed_results()
     
-    cor_comb1 <- cor(res$comb1, res$mixture1)
-    cor_comb2 <- cor(res$comb2, res$mixture2)
-    rmse_comb1 <- sqrt(mean((res$comb1 - res$mixture1)^2))
-    rmse_comb2 <- sqrt(mean((res$comb2 - res$mixture2)^2))
+    # --- ORIGINAL METRICS ---
+    cor_original1 <- cor(res$comb1, res$mixture1)
+    cor_original2 <- cor(res$comb2, res$mixture2)
+    rmse_original1 <- sqrt(mean((res$mixture1 - res$comb1)^2))
+    rmse_original2 <- sqrt(mean((res$mixture2 - res$comb2)^2))
     
+    # --- ADJUSTED METRICS (lm-based) ---
+    cor_adjusted1 <- cor(res$comb1_adj, res$mixture1)
+    cor_adjusted2 <- cor(res$comb2_adj, res$mixture2)
+    rmse_adjusted1 <- sqrt(mean((res$mixture1 - res$comb1_adj)^2))
+    rmse_adjusted2 <- sqrt(mean((res$mixture2 - res$comb2_adj)^2))
+    
+    # --- LOCAL WINDOWS ---
     idx_S1_local <- which(res$t_total >= input$window_range[1] &
                             res$t_total <= input$window_range[2])
     US_local <- res$originalUS[idx_S1_local]
@@ -635,30 +669,58 @@ server <- function(input, output, session) {
     mean_loc_S2 <- cor(S2_local, RF_local)
     
     data.frame(
-      Metric = c("Corr comb1 vs mixture1",
-                 "Corr comb2 vs mixture2",
-                 "RMSE comb1",
-                 "RMSE comb2",
-                 "Mean local corr S1 (US Window)",
-                 "Mean local corr S2 (RF Window)"),
-      Value = c(sprintf("%.4f", cor_comb1),
-                sprintf("%.4f", cor_comb2),
-                sprintf("%.6f", rmse_comb1),
-                sprintf("%.6f", rmse_comb2),
-                sprintf("%.4f", mean_loc_S1),
-                sprintf("%.4f", mean_loc_S2))
+      Metric = c(
+        "Corr comb1 (original) vs mixture1",
+        "Corr comb1 (adjusted) vs mixture1",
+        "RMSE comb1 (original)",
+        "RMSE comb1 (adjusted)",
+        
+        "Corr comb2 (original) vs mixture2",
+        "Corr comb2 (adjusted) vs mixture2",
+        "RMSE comb2 (original)",
+        "RMSE comb2 (adjusted)",
+        
+        "Mean local corr S1 (US Window)",
+        "Mean local corr S2 (RF Window)"
+      ),
+      
+      Value = c(
+        sprintf("%.4f", cor_original1),
+        sprintf("%.4f", cor_adjusted1),
+        sprintf("%.6f", rmse_original1),
+        sprintf("%.6f", rmse_adjusted1),
+        
+        sprintf("%.4f", cor_original2),
+        sprintf("%.4f", cor_adjusted2),
+        sprintf("%.6f", rmse_original2),
+        sprintf("%.6f", rmse_adjusted2),
+        
+        sprintf("%.4f", mean_loc_S1),
+        sprintf("%.4f", mean_loc_S2)
+      )
     )
   }, striped = TRUE, hover = TRUE, bordered = TRUE)
   
-  # --- Metrics Output ---
+  
   output$metrics_output <- renderText({
     res <- processed_results()
     
-    cor_comb1_mixture1 <- cor(res$comb1, res$mixture1)
-    cor_comb2_mixture2 <- cor(res$comb2, res$mixture2)
-    rmse_comb1_mixture1 <- sqrt(mean((res$comb1 - res$mixture1)^2))
-    rmse_comb2_mixture2 <- sqrt(mean((res$comb2 - res$mixture2)^2))
+    # Original correlations
+    cor_original1 <- cor(res$comb1, res$mixture1)
+    cor_original2 <- cor(res$comb2, res$mixture2)
     
+    # Adjusted correlations (lm-based)
+    cor_adjusted1 <- cor(res$comb1_adj, res$mixture1)
+    cor_adjusted2 <- cor(res$comb2_adj, res$mixture2)
+    
+    # RMSE original vs adjusted (script-style)
+    rmse_original1 <- sqrt(mean((res$mixture1 - res$comb1)^2))
+    rmse_original2 <- sqrt(mean((res$mixture2 - res$comb2)^2))
+    
+    rmse_adjusted1 <- sqrt(mean((res$mixture1 - res$comb1_adj)^2))
+    rmse_adjusted2 <- sqrt(mean((res$mixture2 - res$comb2_adj)^2))
+    
+    # Local windows
     idx_S1_local <- which(res$t_total >= input$window_range[1] &
                             res$t_total <= input$window_range[2])
     US_local <- res$originalUS[idx_S1_local]
@@ -672,21 +734,30 @@ server <- function(input, output, session) {
       "----------------------------------------------------\n",
       "LINEAR COMBINATION DIAGNOSTICS - MANUALLY ADJUSTED WEIGHTS\n",
       "----------------------------------------------------\n\n",
-      "comb1 vs mixture1: ", round(cor_comb1_mixture1, 4),
-      " | RMSE = ", round(rmse_comb1_mixture1, 6), "\n",
-      "comb2 vs mixture2: ", round(cor_comb2_mixture2, 4),
-      " | RMSE = ", round(rmse_comb2_mixture2, 6), "\n\n",
+      
+      "===== MIXTURE 1 =====\n",
+      "Correlation original : ", round(cor_original1, 4), "\n",
+      "Correlation adjusted : ", round(cor_adjusted1, 4), "\n",
+      "RMSE original        : ", round(rmse_original1, 6), "\n",
+      "RMSE adjusted        : ", round(rmse_adjusted1, 6), "\n\n",
+      
+      "===== MIXTURE 2 =====\n",
+      "Correlation original : ", round(cor_original2, 4), "\n",
+      "Correlation adjusted : ", round(cor_adjusted2, 4), "\n",
+      "RMSE original        : ", round(rmse_original2, 6), "\n",
+      "RMSE adjusted        : ", round(rmse_adjusted2, 6), "\n\n",
       
       "----------------------------------------------------\n",
       "LOCAL CORRELATIONS IN VISIBLE WINDOWS\n",
       "----------------------------------------------------\n",
-      "Local correlation S1 inserted, rotated and compressed vs OriginalUS (",
+      "Local correlation S1 (inserted, aligned) vs OriginalUS (",
       input$window_range[1], "-", input$window_range[2], " s): ",
       round(cor(S1_local, US_local), 4), "\n",
       "Local correlation S2 vs OriginalRF (0–0.015 s): ",
       round(cor(S2_local, RF_local), 4), "\n"
     )
   })
+  
   
   # --- Stability Output ---
   output$stability_output <- renderText({
